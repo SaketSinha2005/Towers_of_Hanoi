@@ -1,26 +1,6 @@
 """
 inference.py — Run inference on a NEW MRI scan
 
-Supports two input formats:
-  1. H5 file  (.h5)  — same format as BraTS2020 Kaggle dataset
-  2. NIfTI files (.nii / .nii.gz) — 4 separate files, one per modality
-  3. NumPy file (.npy) — pre-stacked [4, H, W] array
-
-Usage examples:
-  # From H5 file (Kaggle format):
-  python3 inference.py --input path/to/scan.h5
-
-  # From 4 NIfTI files:
-  python3 inference.py --t1 t1.nii.gz --t1ce t1ce.nii.gz \
-                       --t2 t2.nii.gz --flair flair.nii.gz \
-                       --slice 75
-
-  # From NumPy array [4, H, W]:
-  python3 inference.py --input path/to/scan.npy
-
-  # With custom checkpoint:
-  python3 inference.py --input scan.h5 --checkpoint path/to/model.pth
-
 Output saved to:  outputs/inference/<scan_name>/
   - segmentation.png     → predicted tumor mask overlaid on MRI
   - gradcam_report.png   → Grad-CAM heatmaps showing model focus
