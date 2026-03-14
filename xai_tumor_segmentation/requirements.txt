@@ -1,11 +1,5 @@
-# ─── Mac M3 / Apple Silicon Setup ────────────────────────────────────────────
-# Install PyTorch with MPS support (already included in standard wheel for macOS):
-#   pip install torch torchvision
-# Do NOT install the CUDA wheel — it won't work on M3.
-# Verify MPS is available after install:
-#   python -c "import torch; print(torch.backends.mps.is_available())"  # should print True
-#
-# Install everything else:
+# ─────────────────────────────────────────────────────────────────────────────
+# Install everything using:
 #   pip install -r requirements.txt
 # ─────────────────────────────────────────────────────────────────────────────
 
