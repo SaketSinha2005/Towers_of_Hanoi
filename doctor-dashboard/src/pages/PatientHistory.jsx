@@ -2,6 +2,58 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, FileText, Download, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 
+// Renders markdown text as structured JSX (bold, headers, lists, paragraphs)
+function MarkdownRenderer({ text }) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements = [];
+  let listItems = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={key++} style={{ paddingLeft: '1.5rem', marginBottom: '0.75rem', lineHeight: '1.7' }}>
+          {listItems.map((item, i) => <li key={i}>{renderInline(item)}</li>)}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+
+  const renderInline = (str) => {
+    const parts = str.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) =>
+      part.startsWith('**') && part.endsWith('**')
+        ? <strong key={i}>{part.slice(2, -2)}</strong>
+        : part
+    );
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line === '---') { flushList(); continue; }
+
+    if (line.startsWith('## ')) {
+      flushList();
+      elements.push(<h3 key={key++} style={{ fontWeight: '700', fontSize: '1rem', marginTop: '1.25rem', marginBottom: '0.4rem', color: '#1e3a5f' }}>{line.slice(3)}</h3>);
+    } else if (line.startsWith('# ')) {
+      flushList();
+      elements.push(<h2 key={key++} style={{ fontWeight: '700', fontSize: '1.1rem', marginTop: '1rem', marginBottom: '0.5rem', color: '#1e3a5f' }}>{line.slice(2)}</h2>);
+    } else if (/^\d+\.\s/.test(line)) {
+      listItems.push(line.replace(/^\d+\.\s/, ''));
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      listItems.push(line.slice(2));
+    } else {
+      flushList();
+      elements.push(<p key={key++} style={{ marginBottom: '0.6rem', lineHeight: '1.7', color: '#334155' }}>{renderInline(line)}</p>);
+    }
+  }
+  flushList();
+  return <div>{elements}</div>;
+}
+
 export default function PatientHistory() {
   const { patientId } = useParams();
   const navigate = useNavigate();
@@ -125,7 +177,9 @@ useEffect(() => {
                 <div style={{ padding: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ marginBottom: '1.5rem' }}>
                     <h4 style={{ fontSize: '0.875rem', fontWeight: '600', color: '#475569', marginBottom: '0.5rem' }}>AI ANALYSIS</h4>
-                    <p style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>{scan.report}</p>
+                    <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>
+                      <MarkdownRenderer text={scan.report} />
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: '1rem' }}>
                     <button className="btn-outline" onClick={() => navigate(`/dashboard/analysis/${patient.id}`)}>Chat with AI</button>

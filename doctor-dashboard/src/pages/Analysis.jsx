@@ -83,8 +83,24 @@ export default function Analysis() {
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           {scanId && (
-            <button className="btn-outline" onClick={() => window.open(`http://127.0.0.1:8000/scan/${scanId}/generate-image`, '_blank')}>
-              View Result Image
+            <button className="btn-outline" onClick={async () => {
+              try {
+                const res = await fetch(`http://127.0.0.1:8000/scan/${scanId}/generate-image`);
+                if (!res.ok) throw new Error("Failed to generate image");
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `neurovision_result_${scanId.slice(0, 8)}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } catch (err) {
+                alert("Image download failed: " + err.message);
+              }
+            }}>
+              Download Result Image
             </button>
           )}
           <button className="btn-primary" onClick={() => navigate('/dashboard')}>Exit Analysis</button>
