@@ -1,11 +1,26 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Brain, UserPlus, Upload, Settings as SettingsIcon, LogOut, LayoutDashboard } from 'lucide-react';
+import {
+  Brain,
+  UserPlus,
+  Upload,
+  Settings as SettingsIcon,
+  LogOut,
+  LayoutDashboard,
+  ScanEye // Importing a new icon for the brain viewer
+} from 'lucide-react';
 
 export default function DashboardLayout({ onLogout }) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
+    // 1. Clear session data from localStorage
+    localStorage.removeItem('neurovision_doctor_id');
+    localStorage.removeItem('neurovision_doctor_name');
+
+    // 2. Trigger the logout state in App.jsx
     onLogout();
+
+    // 3. Redirect to the landing page
     navigate('/');
   };
 
@@ -18,7 +33,8 @@ export default function DashboardLayout({ onLogout }) {
     color: isActive ? 'white' : '#94a3b8',
     backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
     transition: 'all 0.2s',
-    marginBottom: '0.5rem'
+    marginBottom: '0.5rem',
+    textDecoration: 'none' // Ensures links don't have underlines
   });
 
   return (
@@ -40,15 +56,24 @@ export default function DashboardLayout({ onLogout }) {
           <NavLink to="/dashboard/upload" style={({ isActive }) => navItemStyle(isActive)}>
             <Upload size={20} /> Upload MRI Scan
           </NavLink>
+
+
         </nav>
 
         <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <NavLink to="/dashboard/settings" style={({ isActive }) => navItemStyle(isActive)}>
             <SettingsIcon size={20} /> Settings
           </NavLink>
-          <button 
+          <button
             onClick={handleLogout}
-            style={{ ...navItemStyle(false), width: '100%', border: '1px solid #475569', marginTop: '0.5rem' }}
+            style={{
+              ...navItemStyle(false),
+              width: '100%',
+              border: '1px solid #475569',
+              marginTop: '0.5rem',
+              cursor: 'pointer',
+              background: 'none'
+            }}
           >
             <LogOut size={20} /> Log Out
           </button>

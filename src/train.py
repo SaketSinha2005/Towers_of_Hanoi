@@ -1,4 +1,3 @@
-import os
 import argparse
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import Callback
@@ -16,7 +15,7 @@ from preprocessing import (
     TRAIN_DATASET_PATH,
     IMG_SIZE
 )
-from unet import create_unet_model, CUSTOM_OBJECTS
+from backend.unet import create_unet_model
 
 
 def setup_callbacks(model_save_path='D:/Hackdata/model/best_model.weights.h5',

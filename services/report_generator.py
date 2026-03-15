@@ -25,10 +25,10 @@ Gender: {gender}
 Age: {age}
 
 Tumor metrics:
-Edema ratio: {edema}
-Tumor core ratio: {core}
-Enhancing tumor ratio: {enhancing}
-Total tumor volume: {volume} cm³
+Edema ratio: {edema}%
+Tumor core ratio: {core}%
+Enhancing tumor ratio: {enhancing}%
+Total tumor ratio: {volume}%
 
 The report should contain these sections:
 

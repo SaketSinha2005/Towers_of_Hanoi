@@ -9,4 +9,4 @@ def load_model():
     if model is None:
         model = load_best_model(MODEL_PATH)
 
-    return model
+    return model    

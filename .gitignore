@@ -2,4 +2,4 @@
 model
 BraTS2020_TrainingData
 BraTS2020_ValidationData
-src/best_model.weights.h5
+model/best_model.weights.h5

@@ -1,13 +1,51 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Brain } from 'lucide-react';
 
 export default function Login({ onLogin }) {
   const navigate = useNavigate();
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onLogin();
-    navigate('/dashboard');
+    setError('');
+    setIsLoading(true);
+
+    const formData = new FormData(e.target);
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/doctor/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Invalid login credentials');
+      }
+
+      console.log("Login successful:", data);
+      localStorage.setItem('neurovision_doctor_id', data.doctor_id);
+      // Uses the first part of the email as the display name for your dashboard
+      localStorage.setItem('neurovision_doctor_name', `Dr. ${email.split('@')[0]}`);
+
+      onLogin();
+      navigate('/dashboard');
+
+    } catch (err) {
+      console.error("Login Error:", err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -21,39 +59,42 @@ export default function Login({ onLogin }) {
           <p style={{ color: '#64748b', marginTop: '0.5rem' }}>Access your NeuroVision Hub</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="doctorId">Doctor ID</label>
-            <input 
-              type="text" 
-              id="doctorId" 
-              className="form-input" 
-              placeholder="e.g. DOC-12345" 
-              required 
-            />
+        {error && (
+          <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.875rem', textAlign: 'center' }}>
+            {error}
           </div>
-          
-          <div className="form-group" style={{ marginBottom: '2rem' }}>
-            <label className="form-label" htmlFor="password">Password</label>
-            <input 
-              type="password" 
-              id="password" 
-              className="form-input" 
-              placeholder="Enter your password" 
-              required 
+        )}
+
+        <form onSubmit={handleSubmit}>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="email">Email Address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              className="form-input"
+              placeholder="doctor@hospital.org"
+              required
             />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }}>
-            Access Dashboard
+          <div className="form-group" style={{ marginBottom: '2rem' }}>
+            <label className="form-label" htmlFor="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              className="form-input"
+              placeholder="Enter your password"
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }} disabled={isLoading}>
+            {isLoading ? 'Authenticating...' : 'Access Dashboard'}
           </button>
         </form>
-        
-        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
-            Don't have an account? <a href="/signup" style={{ color: '#2563eb', fontWeight: '500' }}>Sign up</a>
-          </p>
-        </div>
       </div>
     </div>
   );

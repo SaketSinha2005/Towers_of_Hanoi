@@ -1,264 +1,191 @@
+
 import os
 import cv2
 import numpy as np
-import nibabel as nib
 import matplotlib.pyplot as plt
+import argparse
 
-# Import our custom modules
-from preprocessing import (
-    load_single_case,
-    TRAIN_DATASET_PATH,
-    VOLUME_START_AT,
-    VOLUME_SLICES,
-    IMG_SIZE,
-    SEGMENT_CLASSES
-)
-from train import load_best_model
-
-
-def predict_case(model, case_path, case_id):
-    # Load and preprocess the case
-    X = load_single_case(case_path, case_id)
-
-    # Predict
-    predictions = model.predict(X, verbose=1)
-
-    return predictions
+# Configuration
+IMG_SIZE = 128
+VOLUME_START_AT = 22
+SEGMENT_CLASSES = {
+    0: 'NOT tumor',
+    1: 'NECROTIC/CORE',
+    2: 'EDEMA',
+    3: 'ENHANCING'
+}
 
 
-def visualize_prediction(case_path, case_id, predictions, slice_idx=60):
-    # Load ground truth and original images
-    gt_path = os.path.join(case_path, f'BraTS20_Training_{case_id}_seg.nii')
-    flair_path = os.path.join(case_path, f'BraTS20_Training_{case_id}_flair.nii')
+def preprocess_single_modality(scan_data):
+    X = np.empty((100, IMG_SIZE, IMG_SIZE, 2))
 
-    gt = nib.load(gt_path).get_fdata()
-    orig_image = nib.load(flair_path).get_fdata()
+    for j in range(100):
+        slice_data = scan_data[:, :, j + VOLUME_START_AT]
+        resized = cv2.resize(slice_data, (IMG_SIZE, IMG_SIZE))
 
-    # Extract predictions for each class
-    core = predictions[:, :, :, 1]
-    edema = predictions[:, :, :, 2]
-    enhancing = predictions[:, :, :, 3]
+        # Normalize
+        if resized.max() > 0:
+            normalized = resized / resized.max()
+        else:
+            normalized = resized
 
-    # Create visualization
-    fig, axarr = plt.subplots(1, 6, figsize=(18, 5))
+        # Duplicate to create 2 channels
+        X[j, :, :, 0] = normalized
+        X[j, :, :, 1] = normalized
 
-    # Resize original image for background
-    background = cv2.resize(
-        orig_image[:, :, slice_idx + VOLUME_START_AT],
+    return X
+
+
+def calculate_tumor_ratios(predictions, slice_idx, original_scan):
+    """Calculate tumor ratios."""
+    pred_classes = np.argmax(predictions[slice_idx], axis=-1)
+
+    brain_slice = cv2.resize(
+        original_scan[:, :, slice_idx + VOLUME_START_AT],
         (IMG_SIZE, IMG_SIZE)
     )
+    brain_mask = brain_slice > (brain_slice.max() * 0.1)
+    brain_pixels = np.sum(brain_mask)
 
-    # Display background on all subplots
-    for i in range(6):
-        axarr[i].imshow(background, cmap="gray", interpolation='none')
+    if brain_pixels == 0:
+        return {'Total Tumor Ratio': 0.0, 'Enhancing Tumor Ratio': 0.0,
+                'Tumor Core Ratio': 0.0, 'Edema Ratio': 0.0,
+                'Brain Pixels': 0, 'Total Tumor Pixels': 0}
 
-    # Original FLAIR image
-    axarr[0].imshow(background, cmap="gray")
-    axarr[0].set_title('Original FLAIR')
-    axarr[0].axis('off')
+    necrotic_pixels = np.sum(pred_classes == 1)
+    edema_pixels = np.sum(pred_classes == 2)
+    enhancing_pixels = np.sum(pred_classes == 3)
 
-    # Ground truth
-    curr_gt = cv2.resize(
-        gt[:, :, slice_idx + VOLUME_START_AT],
-        (IMG_SIZE, IMG_SIZE),
-        interpolation=cv2.INTER_NEAREST
-    )
-    axarr[1].imshow(curr_gt, cmap="Reds", interpolation='none', alpha=0.3)
-    axarr[1].set_title('Ground Truth')
-    axarr[1].axis('off')
+    tumor_core_pixels = necrotic_pixels + enhancing_pixels
+    total_tumor_pixels = necrotic_pixels + edema_pixels + enhancing_pixels
 
-    # All classes predicted
-    axarr[2].imshow(predictions[slice_idx, :, :, 1:4], cmap="Reds",
-                    interpolation='none', alpha=0.3)
-    axarr[2].set_title('All Classes Predicted')
-    axarr[2].axis('off')
-
-    # Necrotic/Core (class 1)
-    axarr[3].imshow(core[slice_idx, :, :], cmap="OrRd",
-                    interpolation='none', alpha=0.3)
-    axarr[3].set_title(f'{SEGMENT_CLASSES[1]} Predicted')
-    axarr[3].axis('off')
-
-    # Edema (class 2)
-    axarr[4].imshow(edema[slice_idx, :, :], cmap="OrRd",
-                    interpolation='none', alpha=0.3)
-    axarr[4].set_title(f'{SEGMENT_CLASSES[2]} Predicted')
-    axarr[4].axis('off')
-
-    # Enhancing (class 3)
-    axarr[5].imshow(enhancing[slice_idx, :, :], cmap="OrRd",
-                    interpolation='none', alpha=0.3)
-    axarr[5].set_title(f'{SEGMENT_CLASSES[3]} Predicted')
-    axarr[5].axis('off')
-
-    plt.tight_layout()
-    plt.show()
+    return {
+        'Total Tumor Ratio': (total_tumor_pixels / brain_pixels) * 100,
+        'Enhancing Tumor Ratio': (enhancing_pixels / brain_pixels) * 100,
+        'Tumor Core Ratio': (tumor_core_pixels / brain_pixels) * 100,
+        'Edema Ratio': (edema_pixels / brain_pixels) * 100,
+        'Brain Pixels': int(brain_pixels),
+        'Total Tumor Pixels': int(total_tumor_pixels)
+    }
 
 
-def predict_and_visualize(model, case_path, case_id, slice_idx=60):
-    """
-    Predict and visualize results for a case.
+def calculate_confidence_scores(predictions, slice_idx):
+    """Calculate confidence scores."""
+    slice_probs = predictions[slice_idx]
+    pred_classes = np.argmax(slice_probs, axis=-1)
 
-    Args:
-        model: Trained U-Net model
-        case_path: Path to the patient directory
-        case_id: Patient ID
-        slice_idx: Index of slice to visualize
-    """
-    print(f"Predicting for case: {case_id}")
+    confidence_scores = {}
+
+    for class_id in [1, 2, 3]:
+        class_mask = (pred_classes == class_id)
+
+        if np.sum(class_mask) > 0:
+            class_confidences = slice_probs[:, :, class_id][class_mask]
+            confidence_scores[SEGMENT_CLASSES[class_id]] = {
+                'mean': float(np.mean(class_confidences) * 100),
+                'max': float(np.max(class_confidences) * 100),
+                'pixels': int(np.sum(class_mask))
+            }
+        else:
+            confidence_scores[SEGMENT_CLASSES[class_id]] = {
+                'mean': 0.0, 'max': 0.0, 'pixels': 0
+            }
+
+    return confidence_scores
+
+
+def predict_single_file(model, scan_data, slice_idx=60, save_path=None, filename="scan"):
+    """Run inference on a single scan."""
+    print("\n" + "="*80)
+    print("SINGLE-FILE BRAIN TUMOR SEGMENTATION")
+    print("="*80)
+
+    # Preprocess
+    print(f"Preprocessing...")
+    X = preprocess_single_modality(scan_data)
 
     # Predict
-    predictions = predict_case(model, case_path, case_id)
+    print("Running inference...")
+    predictions = model.predict(X, verbose=0)
+    print("✓ Complete!")
 
-    print(f"Prediction shape: {predictions.shape}")
+    # Get results
+    pred_probs = predictions[slice_idx]
 
-    # Visualize
-    visualize_prediction(case_path, case_id, predictions, slice_idx)
+    # Metrics
+    confidence_scores = calculate_confidence_scores(predictions, slice_idx)
+    tumor_ratios = calculate_tumor_ratios(predictions, slice_idx, scan_data)
 
+    # Visualization
+    original_slice = cv2.resize(
+        scan_data[:, :, slice_idx + VOLUME_START_AT], (IMG_SIZE, IMG_SIZE)
+    )
+    original_norm = original_slice / (original_slice.max() + 1e-6)
 
-def batch_predict(model, case_ids, dataset_path=TRAIN_DATASET_PATH):
-    """
-    Predict segmentation for multiple cases.
+    fig, axes = plt.subplots(1, 6, figsize=(24, 4))
 
-    Args:
-        model: Trained U-Net model
-        case_ids: List of patient IDs
-        dataset_path: Path to the BraTS dataset
+    for ax in axes:
+        ax.imshow(original_norm, cmap='gray')
+        ax.axis('off')
 
-    Returns:
-        predictions_dict: Dictionary mapping case_id to predictions
-    """
-    predictions_dict = {}
+    axes[0].set_title('Original MRI', fontsize=12, fontweight='bold')
 
-    for case_id in case_ids:
-        print(f"\nProcessing case: {case_id}")
-        case_path = os.path.join(dataset_path, case_id)
+    axes[1].text(64, 64, 'Ground Truth\nNot Available',
+                 ha='center', va='center', fontsize=10, color='white',
+                 bbox=dict(boxstyle='round', facecolor='red', alpha=0.7))
+    axes[1].set_title('Ground truth (N/A)', fontsize=12, fontweight='bold')
 
-        # Predict
-        predictions = predict_case(model, case_path, case_id.split('_')[-1])
-        predictions_dict[case_id] = predictions
+    axes[2].imshow(pred_probs[:, :, 1:4], cmap='Reds', alpha=0.3)
+    axes[2].set_title(f'All classes\nTumor: {tumor_ratios["Total Tumor Ratio"]:.1f}%',
+                      fontsize=11, fontweight='bold')
 
-        print(f"Completed: {case_id}")
+    axes[3].imshow(pred_probs[:, :, 1], cmap='OrRd', alpha=0.3)
+    axes[3].set_title(f'{SEGMENT_CLASSES[1]}\nConf: {confidence_scores[SEGMENT_CLASSES[1]]["mean"]:.1f}%',
+                      fontsize=11, fontweight='bold')
 
-    return predictions_dict
+    axes[4].imshow(pred_probs[:, :, 2], cmap='OrRd', alpha=0.3)
+    axes[4].set_title(f'{SEGMENT_CLASSES[2]}\nRatio: {tumor_ratios["Edema Ratio"]:.1f}%',
+                      fontsize=11, fontweight='bold')
 
+    axes[5].imshow(pred_probs[:, :, 3], cmap='OrRd', alpha=0.3)
+    axes[5].set_title(f'{SEGMENT_CLASSES[3]}\nRatio: {tumor_ratios["Enhancing Tumor Ratio"]:.1f}%',
+                      fontsize=11, fontweight='bold')
 
-def calculate_dice_score(pred_mask, true_mask, class_id):
-    """
-    Calculate Dice score for a specific class.
+    fig.suptitle(f'{filename} | Slice: {slice_idx + VOLUME_START_AT}',
+                 fontsize=14, fontweight='bold', y=0.98)
 
-    Args:
-        pred_mask: Predicted segmentation mask (categorical)
-        true_mask: Ground truth segmentation mask (categorical)
-        class_id: Class ID to evaluate
+    plt.tight_layout()
 
-    Returns:
-        Dice score
-    """
-    pred_binary = (pred_mask == class_id).astype(float)
-    true_binary = (true_mask == class_id).astype(float)
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"\n✓ Saved: {save_path}")
 
-    intersection = np.sum(pred_binary * true_binary)
-    denominator = np.sum(pred_binary) + np.sum(true_binary)
+    plt.close()
 
-    if denominator == 0:
-        return 1.0  # Both masks are empty for this class
+    # Print metrics
+    print("\n" + "="*80)
+    print("RESULTS")
+    print("="*80)
+    print(f"\nTumor Ratios:")
+    print(f"  Total: {tumor_ratios['Total Tumor Ratio']:.2f}%")
+    print(f"  Enhancing: {tumor_ratios['Enhancing Tumor Ratio']:.2f}%")
+    print(f"  Core: {tumor_ratios['Tumor Core Ratio']:.2f}%")
+    print(f"  Edema: {tumor_ratios['Edema Ratio']:.2f}%")
 
-    dice = (2.0 * intersection) / denominator
-    return dice
+    print(f"\nConfidence:")
+    for name, scores in confidence_scores.items():
+        print(f"  {name}: {scores['mean']:.1f}% (pixels: {scores['pixels']})")
 
+    print("="*80)
 
-def evaluate_predictions(predictions, case_path, case_id):
-    """
-    Evaluate predictions against ground truth.
-
-    Args:
-        predictions: Predicted segmentation masks
-        case_path: Path to the patient directory
-        case_id: Patient ID
-
-    Returns:
-        scores: Dictionary of Dice scores per class
-    """
-    # Load ground truth
-    gt_path = os.path.join(case_path, f'BraTS20_Training_{case_id}_seg.nii')
-    gt = nib.load(gt_path).get_fdata()
-
-    # Get predicted classes (argmax over channel dimension)
-    pred_classes = np.argmax(predictions, axis=-1)
-
-    # Calculate Dice scores for each class
-    scores = {}
-    for class_id in [1, 2, 3]:  # Skip background (class 0)
-        dice_scores = []
-
-        for i in range(VOLUME_SLICES):
-            # Get true mask for this slice
-            true_slice = gt[:, :, i + VOLUME_START_AT]
-            true_resized = cv2.resize(
-                true_slice,
-                (IMG_SIZE, IMG_SIZE),
-                interpolation=cv2.INTER_NEAREST
-            )
-
-            # Convert class 4 to class 3
-            true_resized[true_resized == 4] = 3
-
-            # Calculate Dice for this slice
-            dice = calculate_dice_score(pred_classes[i], true_resized, class_id)
-            dice_scores.append(dice)
-
-        # Average Dice across all slices
-        scores[SEGMENT_CLASSES[class_id]] = np.mean(dice_scores)
-
-    return scores
+    return predictions, confidence_scores, tumor_ratios
 
 
-def main():
-    """Example usage of prediction functions."""
-
-    # Load the trained model
-    print("Loading model...")
-    model = load_best_model('best_model.weights.h5')
-
-    # Example 1: Predict and visualize a single case
-    print("\n" + "=" * 80)
-    print("Example 1: Single case prediction and visualization")
-    print("=" * 80)
-
-    case_id = "355"  # Change this to your case ID
-    case_path = os.path.join(TRAIN_DATASET_PATH, f'BraTS20_Training_{case_id}')
-
-    if os.path.exists(case_path):
-        predict_and_visualize(model, case_path, case_id, slice_idx=60)
-
-        # Evaluate predictions
-        predictions = predict_case(model, case_path, case_id)
-        scores = evaluate_predictions(predictions, case_path, case_id)
-
-        print("\nDice Scores:")
-        for class_name, score in scores.items():
-            print(f"  {class_name}: {score:.4f}")
-    else:
-        print(f"Case path not found: {case_path}")
-
-    # Example 2: Batch prediction
-    print("\n" + "=" * 80)
-    print("Example 2: Batch prediction")
-    print("=" * 80)
-
-    # Get a few test case IDs (you would get these from your test split)
-    from preprocessing import get_data_paths
-    _, _, test_ids = get_data_paths()
-
-    # Predict on first 3 test cases
-    sample_cases = test_ids[:3]
-    print(f"Predicting on {len(sample_cases)} cases...")
-
-    predictions_dict = batch_predict(model, sample_cases)
-
-    print(f"\nCompleted predictions for {len(predictions_dict)} cases")
-
-
-if __name__ == "__main__":
-    main()
+# For use as a module
+def run_inference(model, nii_data, slice_idx=60):
+    """Simple function for web integration."""
+    X = preprocess_single_modality(nii_data)
+    predictions = model.predict(X, verbose=0)
+    confidence = calculate_confidence_scores(predictions, slice_idx)
+    ratios = calculate_tumor_ratios(predictions, slice_idx, nii_data)
+    return predictions, confidence, ratios
