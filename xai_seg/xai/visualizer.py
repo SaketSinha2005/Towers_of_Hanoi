@@ -1,5 +1,4 @@
 """
-xai_seg/visualizer.py — XAI Visualization Utilities
 Creates comprehensive visual reports:
   - Segmentation overlays
   - Grad-CAM heatmap overlays
