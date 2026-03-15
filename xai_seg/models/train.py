@@ -1,24 +1,3 @@
-"""
-models/train.py — Optimized Training Loop for Mac M3
-
-Per-epoch console output:
-  ┌─────────────────────────────────────────────────────────┐
-  │ Epoch  5/100                                            │
-  │  Loss      : train=0.4231   val=0.3987                 │
-  │  Accuracy  : train=82.34%   val=84.12%                 │
-  │  Dice (val): WT=0.8612  TC=0.7843  ET=0.6921           │
-  │              Mean=0.7792  ★ New best!                   │
-  │  LR        : 2.40e-04                                   │
-  │  Time      : 12.4m elapsed  |  No-improve: 0/10        │
-  └─────────────────────────────────────────────────────────┘
-
-TensorBoard scalars logged:
-  Loss/train, Loss/val
-  Accuracy/train, Accuracy/val
-  Dice/WT, Dice/TC, Dice/ET, Dice/Mean
-  LR
-"""
-
 import os
 import sys
 import time
