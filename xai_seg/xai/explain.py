@@ -1,15 +1,6 @@
 """
-xai_seg/explain.py — Main XAI Orchestrator
-
 Loads a trained model checkpoint, runs it on test samples,
 and generates Grad-CAM, SHAP, and IG explanations + visual reports.
-
-Fixes applied:
-  1. Grad-CAM moved OUTSIDE torch.no_grad() — CAM needs gradient flow
-  2. Prediction kept inside torch.no_grad() for efficiency
-  3. SHAP background collected with robust loop + float32 cast
-  4. IG uses new manual MPS-safe implementation (no Captum linspace bug)
-  5. All image tensors cast to .float() before any model call
 """
 
 import os
@@ -37,7 +28,6 @@ def explain_model(
     use_ig: bool = True,
 ) -> pd.DataFrame:
     """
-    Run XAI explanations on n_samples from the test set.
     Returns a DataFrame of per-sample metrics.
 
     Args:
