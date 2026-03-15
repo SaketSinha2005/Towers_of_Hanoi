@@ -1,6 +1,4 @@
 """
-main.py — Entry Point for XAI Tumor Segmentation Pipeline
-
 Modes:
   preprocess : Preprocess BraTS2020 volumes → .npy
   train      : Train U-Net model
