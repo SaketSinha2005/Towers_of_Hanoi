@@ -1,9 +1,3 @@
-"""
-utils/metrics.py — Segmentation Metrics
-Dice, IoU, Hausdorff95, Sensitivity, Specificity
-Evaluated for Whole Tumor / Tumor Core / Enhancing Tumor (BraTS convention).
-"""
-
 import numpy as np
 import torch
 import torch.nn.functional as F
