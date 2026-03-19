@@ -8,6 +8,7 @@ A full-stack prototype for **brain tumor segmentation** using a U-Net model trai
 
 ---
 
+
 ## Repository Structure
 
 - `backend/` – FastAPI server and inference pipeline
